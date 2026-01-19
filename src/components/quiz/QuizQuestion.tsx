@@ -1,6 +1,6 @@
-import { useState } from "react";
-import { motion, AnimatePresence } from "framer-motion";
-import { Check, X, ArrowRight, Lightbulb } from "lucide-react";
+import { useState, useEffect, useRef } from "react";
+import { motion } from "framer-motion";
+import { ArrowRight, Clock, SkipForward } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import type { MCQ } from "@/types/quiz";
 
@@ -8,45 +8,70 @@ interface QuizQuestionProps {
   question: MCQ;
   questionNumber: number;
   totalQuestions: number;
+  selectedAnswer: number | null;
   onAnswer: (selectedIndex: number) => void;
-  onNext: () => void;
+  onNext: (timeSpent: number) => void;
 }
 
 export function QuizQuestion({
   question,
   questionNumber,
   totalQuestions,
+  selectedAnswer,
   onAnswer,
   onNext,
 }: QuizQuestionProps) {
-  const [selectedAnswer, setSelectedAnswer] = useState<number | null>(null);
-  const [showExplanation, setShowExplanation] = useState(false);
+  const [localSelected, setLocalSelected] = useState<number | null>(selectedAnswer);
+  const [elapsedTime, setElapsedTime] = useState(0);
+  const startTimeRef = useRef<number>(Date.now());
 
-  const isAnswered = selectedAnswer !== null;
-  const isCorrect = selectedAnswer === question.correctAnswer;
+  // Reset timer when question changes
+  useEffect(() => {
+    startTimeRef.current = Date.now();
+    setElapsedTime(0);
+    setLocalSelected(selectedAnswer);
+  }, [questionNumber, selectedAnswer]);
+
+  // Timer effect
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setElapsedTime(Math.floor((Date.now() - startTimeRef.current) / 1000));
+    }, 1000);
+
+    return () => clearInterval(interval);
+  }, [questionNumber]);
 
   const handleSelect = (index: number) => {
-    if (isAnswered) return;
-    setSelectedAnswer(index);
-    setShowExplanation(true);
+    setLocalSelected(index);
     onAnswer(index);
   };
 
   const handleNext = () => {
-    setSelectedAnswer(null);
-    setShowExplanation(false);
-    onNext();
+    const timeSpent = Math.floor((Date.now() - startTimeRef.current) / 1000);
+    onNext(timeSpent);
   };
 
   const progress = (questionNumber / totalQuestions) * 100;
 
+  const formatTime = (seconds: number) => {
+    const mins = Math.floor(seconds / 60);
+    const secs = seconds % 60;
+    return `${mins}:${secs.toString().padStart(2, '0')}`;
+  };
+
   return (
     <div className="min-h-screen flex flex-col p-6 max-w-3xl mx-auto">
-      {/* Progress Bar */}
+      {/* Progress Bar & Timer */}
       <div className="mb-8">
         <div className="flex justify-between text-sm font-medium text-muted-foreground mb-2">
           <span>Question {questionNumber} of {totalQuestions}</span>
-          <span>{Math.round(progress)}% Complete</span>
+          <div className="flex items-center gap-4">
+            <span className="flex items-center gap-1.5 text-primary font-semibold">
+              <Clock className="w-4 h-4" />
+              {formatTime(elapsedTime)}
+            </span>
+            <span>{Math.round(progress)}% Complete</span>
+          </div>
         </div>
         <div className="h-2 bg-secondary rounded-full overflow-hidden">
           <motion.div
@@ -75,45 +100,26 @@ export function QuizQuestion({
         {/* Options */}
         <div className="space-y-3 mb-6">
           {question.options.map((option, index) => {
-            let optionState: 'default' | 'selected' | 'correct' | 'incorrect' = 'default';
-            
-            if (isAnswered) {
-              if (index === question.correctAnswer) {
-                optionState = 'correct';
-              } else if (index === selectedAnswer) {
-                optionState = 'incorrect';
-              }
-            }
+            const isSelected = localSelected === index;
 
             return (
               <motion.button
                 key={index}
-                whileHover={!isAnswered ? { scale: 1.01 } : {}}
-                whileTap={!isAnswered ? { scale: 0.99 } : {}}
+                whileHover={{ scale: 1.01 }}
+                whileTap={{ scale: 0.99 }}
                 onClick={() => handleSelect(index)}
-                disabled={isAnswered}
                 className={`w-full p-4 md:p-5 rounded-xl text-left transition-all flex items-center gap-4 ${
-                  optionState === 'correct'
-                    ? 'bg-success/10 border-2 border-success text-foreground'
-                    : optionState === 'incorrect'
-                    ? 'bg-destructive/10 border-2 border-destructive text-foreground'
+                  isSelected
+                    ? 'bg-primary/10 border-2 border-primary text-foreground'
                     : 'bg-card border-2 border-border hover:border-primary/50 text-foreground'
                 }`}
               >
                 <div className={`w-10 h-10 rounded-lg flex items-center justify-center font-bold text-lg shrink-0 ${
-                  optionState === 'correct'
-                    ? 'gradient-success text-success-foreground'
-                    : optionState === 'incorrect'
-                    ? 'bg-destructive text-destructive-foreground'
+                  isSelected
+                    ? 'gradient-primary text-primary-foreground'
                     : 'bg-secondary text-secondary-foreground'
                 }`}>
-                  {optionState === 'correct' ? (
-                    <Check className="w-5 h-5" />
-                  ) : optionState === 'incorrect' ? (
-                    <X className="w-5 h-5" />
-                  ) : (
-                    String.fromCharCode(65 + index)
-                  )}
+                  {String.fromCharCode(65 + index)}
                 </div>
                 <span className="font-medium">{option}</span>
               </motion.button>
@@ -121,65 +127,35 @@ export function QuizQuestion({
           })}
         </div>
 
-        {/* Explanation */}
-        <AnimatePresence>
-          {showExplanation && (
-            <motion.div
-              initial={{ opacity: 0, height: 0 }}
-              animate={{ opacity: 1, height: 'auto' }}
-              exit={{ opacity: 0, height: 0 }}
-              className="mb-6"
-            >
-              <div className={`p-5 rounded-xl border-2 ${
-                isCorrect 
-                  ? 'bg-success/5 border-success/30' 
-                  : 'bg-warning/5 border-warning/30'
-              }`}>
-                <div className="flex items-start gap-3">
-                  <Lightbulb className={`w-5 h-5 mt-0.5 shrink-0 ${
-                    isCorrect ? 'text-success' : 'text-warning'
-                  }`} />
-                  <div>
-                    <p className={`font-semibold mb-1 ${
-                      isCorrect ? 'text-success' : 'text-warning'
-                    }`}>
-                      {isCorrect ? 'Correct!' : 'Not quite right'}
-                    </p>
-                    <p className="text-muted-foreground">{question.explanation}</p>
-                  </div>
-                </div>
-              </div>
-            </motion.div>
-          )}
-        </AnimatePresence>
-
-        {/* Next Button */}
-        <AnimatePresence>
-          {isAnswered && (
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              className="mt-auto"
-            >
-              <Button
-                onClick={handleNext}
-                className="w-full h-14 text-lg font-semibold gradient-primary shadow-glow hover:opacity-90 transition-opacity rounded-xl"
-              >
-                {questionNumber === totalQuestions ? (
-                  <span className="flex items-center gap-2">
-                    See Results
-                    <ArrowRight className="w-5 h-5" />
-                  </span>
-                ) : (
-                  <span className="flex items-center gap-2">
-                    Next Question
-                    <ArrowRight className="w-5 h-5" />
-                  </span>
-                )}
-              </Button>
-            </motion.div>
-          )}
-        </AnimatePresence>
+        {/* Navigation Buttons */}
+        <div className="mt-auto flex gap-3">
+          <Button
+            onClick={handleNext}
+            variant="outline"
+            className="flex-1 h-14 text-lg font-semibold rounded-xl border-2"
+          >
+            <span className="flex items-center gap-2">
+              <SkipForward className="w-5 h-5" />
+              {localSelected === null ? 'Skip' : 'Next'}
+            </span>
+          </Button>
+          <Button
+            onClick={handleNext}
+            className="flex-1 h-14 text-lg font-semibold gradient-primary shadow-glow hover:opacity-90 transition-opacity rounded-xl"
+          >
+            {questionNumber === totalQuestions ? (
+              <span className="flex items-center gap-2">
+                Finish Quiz
+                <ArrowRight className="w-5 h-5" />
+              </span>
+            ) : (
+              <span className="flex items-center gap-2">
+                Continue
+                <ArrowRight className="w-5 h-5" />
+              </span>
+            )}
+          </Button>
+        </div>
       </motion.div>
     </div>
   );

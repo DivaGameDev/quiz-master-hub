@@ -15,6 +15,7 @@ const Index = () => {
     questions: [],
     currentIndex: 0,
     answers: [],
+    timeTaken: [],
     showResults: false,
   });
   const { toast } = useToast();
@@ -56,6 +57,7 @@ const Index = () => {
         questions,
         currentIndex: 0,
         answers: new Array(questions.length).fill(null),
+        timeTaken: new Array(questions.length).fill(0),
         showResults: false,
       });
       setScreen('quiz');
@@ -80,7 +82,14 @@ const Index = () => {
     }));
   };
 
-  const handleNext = () => {
+  const handleNext = (timeSpent: number) => {
+    setQuizState(prev => ({
+      ...prev,
+      timeTaken: prev.timeTaken.map((t, i) => 
+        i === prev.currentIndex ? timeSpent : t
+      ),
+    }));
+
     if (quizState.currentIndex < quizState.questions.length - 1) {
       setQuizState(prev => ({
         ...prev,
@@ -98,6 +107,7 @@ const Index = () => {
       questions: [],
       currentIndex: 0,
       answers: [],
+      timeTaken: [],
       showResults: false,
     });
   };
@@ -113,6 +123,7 @@ const Index = () => {
           question={quizState.questions[quizState.currentIndex]}
           questionNumber={quizState.currentIndex + 1}
           totalQuestions={quizState.questions.length}
+          selectedAnswer={quizState.answers[quizState.currentIndex]}
           onAnswer={handleAnswer}
           onNext={handleNext}
         />
@@ -122,6 +133,7 @@ const Index = () => {
         <QuizResults
           questions={quizState.questions}
           answers={quizState.answers}
+          timeTaken={quizState.timeTaken}
           topic={config.topic}
           onRestart={handleRestart}
         />
